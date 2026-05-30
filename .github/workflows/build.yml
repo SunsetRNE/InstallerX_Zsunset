@@ -12,6 +12,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
@@ -39,14 +41,13 @@ jobs:
 
       - name: 发布 Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          name: InstallerX Zsunset v${{ steps.version.outputs.version }}
-          body: |
-            ## InstallerX Zsunset v${{ steps.version.outputs.version }}
-
-            - 模块版本：${{ steps.version.outputs.version }}（code ${{ steps.version.outputs.versionCode }}）
-            - 基于 wxxsfxyzm/InstallerX-Revived 项目
-            - ZIP 结构无外层文件夹，可直接刷入
-          files: output/*.zip
-          make_latest: true
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release create "${{ github.ref_name }}" \
+            output/InstallerX_Zsunset-v${VERSION}.zip \
+            --title "InstallerX Zsunset v${VERSION}" \
+            --notes "模块版本：v${VERSION}（code ${{ steps.version.outputs.versionCode }}）
+                    基于 wxxsfxyzm/InstallerX-Revived 项目
+                    ZIP 结构无外层文件夹，可直接刷入"
+        env:
+          GH_TOKEN: ${{ github.token }}
