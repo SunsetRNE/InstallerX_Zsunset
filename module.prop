@@ -1,9 +1,9 @@
 id=InstallerX_Zsunset
-name=InstallerX Zsunset 暮雨连秋冬重构版
+name=InstallerX Zsunset 暮雨连秋冬 · 模块版
 version=5.0
 versionCode=500
 author=暮雨连秋冬
 description=InstallerX Zsunset · 快速更新 | 防回退 | 音量键选择 ✅
-support=https://t.me/
+support=https://t.me/InstallerX_Zsunset
 updateJson=https://raw.githubusercontent.com/SunsetRNE/InstallerX_Zsunset/main/update.json
 actionIcon=launcher.png
