@@ -1,0 +1,50 @@
+name: 打包模块
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 读取版本号
+        id: version
+        run: |
+          echo "version=$(grep '^version=' module.prop | cut -d= -f2)" >> $GITHUB_OUTPUT
+          echo "versionCode=$(grep '^versionCode=' module.prop | cut -d= -f2)" >> $GITHUB_OUTPUT
+
+      - name: 打包模块
+        run: |
+          # 精准打包：只包含模块必需文件，排除无关内容
+          # 使用 cd 打包确保 zip 内无外层目录
+          cd ${{ github.workspace }}
+          zip -r "../InstallerX_Zsunset-v${{ steps.version.outputs.version }}.zip" . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "README.md"
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: InstallerX_Zsunset-v${{ steps.version.outputs.version }}
+          path: ../InstallerX_Zsunset-v${{ steps.version.outputs.version }}.zip
+
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: InstallerX Zsunset v${{ steps.version.outputs.version }}
+          body: |
+            ## InstallerX Zsunset v${{ steps.version.outputs.version }}
+
+            - 模块版本：${{ steps.version.outputs.version }}（code ${{ steps.version.outputs.versionCode }}）
+            - 基于 wxxsfxyzm/InstallerX-Revived 项目
+            - ZIP 结构无外层文件夹，可直接刷入
+          files: ../InstallerX_Zsunset-v${{ steps.version.outputs.version }}.zip
+          make_latest: true
