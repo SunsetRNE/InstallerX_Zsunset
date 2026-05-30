@@ -49,6 +49,9 @@ jobs:
           name: InstallerX_Zsunset-v${{ steps.version.outputs.version }}
           path: output/*.zip
 
+      # ============================================
+      # 发布 Release（tag 推送触发）
+      # ============================================
       - name: 发布 Release（tag 推送触发）
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -61,6 +64,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      # ============================================
+      # 发布 Release（手动触发）
+      # ============================================
       - name: 发布 Release（手动触发）
         if: github.event_name == 'workflow_dispatch' && inputs.create_release
         run: |
@@ -73,5 +79,37 @@ jobs:
                     基于 wxxsfxyzm/InstallerX-Revived 项目
                     ZIP 结构无外层文件夹，可直接刷入" \
             --target "${{ github.sha }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # ============================================
+      # 更新 update.json（Release 时自动更新）
+      # ============================================
+      - name: 更新 update.json（Release 时）
+        if: |
+          (startsWith(github.ref, 'refs/tags/') ||
+           (github.event_name == 'workflow_dispatch' && inputs.create_release))
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          VCODE="${{ steps.version.outputs.versionCode }}"
+          TAG="v${VERSION}"
+          ZIP_NAME="${{ steps.build.outputs.zip_name }}"
+
+          # 生成新的 update.json
+          cat > update.json <<EOF
+          {
+            "version": "${VERSION}",
+            "versionCode": ${VCODE},
+            "zipUrl": "https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP_NAME}",
+            "changelog": "https://github.com/${{ github.repository }}/releases/tag/${TAG}"
+          }
+          EOF
+
+          # 提交并推回 main 分支
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          git commit -m "chore: auto update update.json to v${VERSION} [skip ci]"
+          git push origin HEAD:main
         env:
           GH_TOKEN: ${{ github.token }}
