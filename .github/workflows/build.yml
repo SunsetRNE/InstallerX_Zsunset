@@ -5,6 +5,12 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 是否同时创建 Release
+        required: true
+        default: false
+        type: boolean
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -25,13 +31,17 @@ jobs:
           echo "versionCode=$(grep '^versionCode=' module.prop | cut -d= -f2)" >> $GITHUB_OUTPUT
 
       - name: 打包模块
+        id: build
         run: |
           mkdir -p output
           cd "${{ github.workspace }}"
-          zip -r "output/InstallerX_Zsunset-v${{ steps.version.outputs.version }}.zip" . \
+          VERSION="${{ steps.version.outputs.version }}"
+          ZIP_NAME="InstallerX_Zsunset-v${VERSION}.zip"
+          zip -r "output/${ZIP_NAME}" . \
             -x ".git/*" \
             -x ".github/*" \
             -x "README.md"
+          echo "zip_name=${ZIP_NAME}" >> $GITHUB_OUTPUT
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -39,15 +49,29 @@ jobs:
           name: InstallerX_Zsunset-v${{ steps.version.outputs.version }}
           path: output/*.zip
 
-      - name: 发布 Release
+      - name: 发布 Release（tag 推送触发）
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           gh release create "${{ github.ref_name }}" \
-            output/InstallerX_Zsunset-v${VERSION}.zip \
+            "output/${{ steps.build.outputs.zip_name }}" \
+            --title "InstallerX Zsunset v${{ steps.version.outputs.version }}" \
+            --notes "模块版本：v${{ steps.version.outputs.version }}（code ${{ steps.version.outputs.versionCode }}）
+                    基于 wxxsfxyzm/InstallerX-Revived 项目
+                    ZIP 结构无外层文件夹，可直接刷入"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: 发布 Release（手动触发）
+        if: github.event_name == 'workflow_dispatch' && inputs.create_release
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          gh release create "$TAG" \
+            "output/${{ steps.build.outputs.zip_name }}" \
             --title "InstallerX Zsunset v${VERSION}" \
             --notes "模块版本：v${VERSION}（code ${{ steps.version.outputs.versionCode }}）
                     基于 wxxsfxyzm/InstallerX-Revived 项目
-                    ZIP 结构无外层文件夹，可直接刷入"
+                    ZIP 结构无外层文件夹，可直接刷入" \
+            --target "${{ github.sha }}"
         env:
           GH_TOKEN: ${{ github.token }}
