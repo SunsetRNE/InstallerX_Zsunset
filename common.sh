@@ -1,5 +1,11 @@
 #!/system/bin/sh
+# ============================================================
+# common.sh — InstallerX Zsunset 共享函数库
+# 作者: 暮雨连秋冬
+# 说明: 被 customize.sh / post-fs-data.sh / service.sh / uninstall.sh 共用
+# ============================================================
 
+# ---------- 常量 ----------
 PACKAGES="com.miui.packageinstaller com.google.android.packageinstaller com.android.packageinstaller"
 FALLBACK_PACKAGES="com.android.permissioncontroller com.google.android.permissioncontroller"
 
@@ -12,6 +18,7 @@ UPDATE_DIR="/data/local/installerx_update"
 STATUS_OK="InstallerX Zsunset · 暮雨连秋冬 ✅"
 STATUS_FAIL="InstallerX Zsunset · 暮雨连秋冬 💢"
 
+# ---------- 多语言函数 ----------
 LANG_MODE="en"
 
 normalize_lang_code() {
@@ -279,11 +286,13 @@ t() {
     esac
 }
 
+# ---------- 快照占位函数（保留扩展点） ----------
 ts_now() { :; }
 capture_runtime_snapshot() { :; }
 capture_common_snapshot() { :; }
 capture_install_snapshot() { :; }
 
+# ---------- 模块描述设置 ----------
 set_desc_for_dir() {
     local d="$1"
     local desc="$2"
@@ -314,6 +323,7 @@ set_module_desc() {
     sed -i "s|^description=.*|description=$desc|" "$MODDIR/module.prop" 2>/dev/null
 }
 
+# ---------- nsenter 跨命名空间挂载工具 ----------
 prepare_nsenter() {
     SELF_NS="$(readlink /proc/self/ns/mnt 2>/dev/null)"
     INIT_NS="$(readlink /proc/1/ns/mnt 2>/dev/null)"
@@ -335,6 +345,7 @@ run_cmd() {
     fi
 }
 
+# ---------- 挂载工具函数 ----------
 get_first_apk_path() {
     local pkg="$1"
     local paths path
@@ -386,13 +397,14 @@ do_umount_if_needed() {
 do_bind_mount() {
     local src="$1"
     local dst="$2"
-    mount -o bind "$src" "$dst" >/dev/null 2>&1; local RC=$?
+    run_cmd mount -o bind "$src" "$dst" >/dev/null 2>&1; local RC=$?
     if [ $RC -ne 0 ]; then
-        mount --bind "$src" "$dst" >/dev/null 2>&1; RC=$?
+        run_cmd mount --bind "$src" "$dst" >/dev/null 2>&1; RC=$?
     fi
     return $RC
 }
 
+# ---------- 缓存清理（增强版） ----------
 cleanup_installer_caches() {
     for d in /data/resource-cache /data/system/package_cache \
             /data/dalvik-cache/arm /data/dalvik-cache/arm64; do
@@ -408,12 +420,13 @@ cleanup_installer_caches() {
     done
 }
 
+# ---------- 分区推断 ----------
 partition_for_apk_path() {
     local p="$1"
     case "$p" in
-        *"/product/"*|/product/*|*"/system/product/"*) echo "/system/product" ;;
-        *"/system_ext/"*|/system_ext/*|*"/system/system_ext/"*) echo "/system/system_ext" ;;
-        *"/vendor/"*|/vendor/*|*"/system/vendor/"*) echo "/system/vendor" ;;
+        *"/product/"*|/product/*|*"/system/product/") echo "/system/product" ;;
+        *"/system_ext/"*|/system_ext/*|*"/system/system_ext/") echo "/system/system_ext" ;;
+        *"/vendor/"*|/vendor/*|*"/system/vendor/") echo "/system/vendor" ;;
         *) echo "/system" ;;
     esac
 }
@@ -429,6 +442,7 @@ normalize_module_path() {
     esac
 }
 
+# ---------- 权限白名单 ----------
 write_whitelist_xml() {
     local partition="$1"
     local MODPATH="$2"
@@ -490,12 +504,17 @@ XML
     set_perm "$xml_path" 0 0 0644
 }
 
+# ============================================================
+# ★ 新增函数：获取 keycheck 路径
+# ============================================================
 get_keycheck_path() {
+    # 优先使用模块自带的
     local MODDIR="${1:-}"
     [ -n "$MODDIR" ] && [ -f "$MODDIR/bin/keycheck" ] && {
         echo "$MODDIR/bin/keycheck"
         return 0
     }
+    # 扫描已安装模块
     for base in /data/adb/modules /data/adb/modules_update; do
         [ -d "$base" ] || continue
         local found
@@ -505,6 +524,9 @@ get_keycheck_path() {
     return 1
 }
 
+# ============================================================
+# ★ 新增函数：检测当前系统安装器包名
+# ============================================================
 detect_installed_pkg() {
     for pkg in $PACKAGES; do
         if pm list packages 2>/dev/null | grep -q "^package:$pkg$"; then
@@ -521,6 +543,9 @@ detect_installed_pkg() {
     pm list packages -s 2>/dev/null | sed 's/^package://' | grep -iE 'packageinstaller|permissioncontroller' | head -n 1
 }
 
+# ============================================================
+# ★ 新增函数：检测系统安装器所属变体
+# ============================================================
 detect_variant() {
     local pkg="$1"
     case "$pkg" in
@@ -528,6 +553,7 @@ detect_variant() {
         com.miui.packageinstaller) echo "MiuiPackageInstaller" ;;
         com.android.packageinstaller) echo "AndroidPackageInstaller" ;;
         *)
+            # 上下文推断
             local path
             path="$(get_first_apk_path "$pkg" 2>/dev/null)"
             local hay="$pkg $path"
@@ -539,6 +565,9 @@ detect_variant() {
     esac
 }
 
+# ============================================================
+# ★ 新增函数：匹配 APK 文件名
+# ============================================================
 match_apk_name() {
     local variant="$1"
     local mode="$2"  # online / offline
@@ -556,16 +585,22 @@ match_apk_name() {
     esac
 }
 
+# ============================================================
+# ★ 新增函数：三阶段图标修复
+# ============================================================
 force_refresh_package_icon() {
     local pkg="$1"
     local phase="$2"  # 1=install, 2=post-fs-data, 3=service
     [ -z "$pkg" ] && return 0
 
+    # Phase 1 / Phase 3 才输出信息
     [ "$phase" != "2" ] && ui_print "- $(t icon_refresh) (phase $phase): $pkg"
 
+    # ---- 停止包进程 ----
     am force-stop "$pkg" >/dev/null 2>&1
     cmd activity force-stop-package "$pkg" >/dev/null 2>&1
 
+    # ---- 清除缓存目录 ----
     for d in /data/resource-cache /data/system/package_cache; do
         [ -d "$d" ] || continue
         find "$d" -maxdepth 4 \( \
@@ -578,6 +613,7 @@ force_refresh_package_icon() {
         \) -exec rm -rf {} + 2>/dev/null
     done
 
+    # ---- 清除 oat 目录 ----
     local apk_path
     apk_path="$(get_first_apk_path "$pkg" 2>/dev/null)"
     if [ -n "$apk_path" ]; then
@@ -587,25 +623,33 @@ force_refresh_package_icon() {
         rm -rf "$apk_dir/lib" >/dev/null 2>&1
     fi
 
+    # ---- 重置编译状态 ----
     cmd package compile --reset "$pkg" >/dev/null 2>&1
 
+    # ---- Phase 3 特有：触发广播 ----
     if [ "$phase" = "3" ]; then
         cmd package resolve-linkage "$pkg" >/dev/null 2>&1 || true
         am broadcast -a android.intent.action.PACKAGE_CHANGED \
             --include-stopped-packages \
             -d "package:$pkg" >/dev/null 2>&1 || true
+        # 通知 Launcher 刷新
         for launcher in com.android.launcher3 com.google.android.apps.nexuslauncher \
                         com.miui.home com.oneplus.launcher com.android.launcher; do
             am force-stop "$launcher" >/dev/null 2>&1 || true
         done
+        # 清除强制刷新标记
         rm -f "$FORCE_REFRESH_FLAG" >/dev/null 2>&1
     fi
 
+    # Phase 2 特有：清除快速更新标记
     [ "$phase" = "2" ] && rm -f "$FORCE_REFRESH_FLAG" >/dev/null 2>&1
 
     [ "$phase" != "2" ] && ui_print "- $(t icon_refresh_done): $pkg"
 }
 
+# ============================================================
+# ★ 新增函数：统一 bind mount（融合快速更新 + 防回退）
+# ============================================================
 ensure_bind_mount() {
     local MODDIR="$1"
     local APK_SRC="$MODDIR/apk/installer.apk"
@@ -614,6 +658,7 @@ ensure_bind_mount() {
 
     [ ! -f "$APK_SRC" ] && return 1
 
+    # 如果目标未指定，尝试读取状态文件或降级检测
     if [ -z "$TARGET_FILE" ] || [ ! -f "$TARGET_FILE" ]; then
         [ -f "$MODDIR/target_apk" ] && TARGET_FILE="$(cat "$MODDIR/target_apk" 2>/dev/null)"
     fi
@@ -621,6 +666,7 @@ ensure_bind_mount() {
         [ -f "$MODDIR/target_pkg" ] && PKG="$(cat "$MODDIR/target_pkg" 2>/dev/null)"
     fi
 
+    # 降级检测目标
     if [ -z "$TARGET_FILE" ] || [ ! -f "$TARGET_FILE" ]; then
         [ -n "$PKG" ] && TARGET_FILE="$(get_first_apk_path "$PKG")"
     fi
@@ -634,6 +680,7 @@ ensure_bind_mount() {
 
     prepare_nsenter
 
+    # 卸载旧 mount
     local cur_src
     cur_src="$(mount_src_for_target "$TARGET_FILE")"
     if [ -n "$cur_src" ] && [ "$cur_src" != "$APK_SRC" ]; then
@@ -642,6 +689,7 @@ ensure_bind_mount() {
         return 0  # 已经是我们挂载的
     fi
 
+    # 等待目标就绪
     local i=0
     while [ ! -e "$TARGET_FILE" ] && [ $i -lt 60 ]; do
         sleep 0.2
@@ -650,9 +698,11 @@ ensure_bind_mount() {
     done
     [ ! -e "$TARGET_FILE" ] && return 1
 
+    # 执行 bind mount
     do_bind_mount "$APK_SRC" "$TARGET_FILE"
     local rc=$?
 
+    # 保存状态
     echo "$TARGET_FILE" > "$MODDIR/target_apk" 2>/dev/null
     echo "$PKG" > "$MODDIR/target_pkg" 2>/dev/null
     echo "$APK_SRC" > "$MODDIR/last_mount_src" 2>/dev/null
@@ -660,6 +710,9 @@ ensure_bind_mount() {
     return $rc
 }
 
+# ============================================================
+# ★ 新增函数：快速更新检测
+# ============================================================
 check_quick_update() {
     local MODDIR="$1"
     local update_dir="$UPDATE_DIR"
@@ -667,6 +720,7 @@ check_quick_update() {
 
     [ -d "$update_dir" ] || return 0
 
+    # 按优先级查找
     for name in "installer.apk" "GooglePackageInstaller.apk" \
                 "AndroidPackageInstaller.apk" "update.apk"; do
         if [ -f "$update_dir/$name" ]; then
@@ -676,10 +730,12 @@ check_quick_update() {
     done
     [ -z "$update_apk" ] && return 0
 
+    # 验证 ZIP 魔数
     local magic
     magic="$(head -c 4 "$update_apk" 2>/dev/null | od -A n -t x1 | tr -d ' \n')"
     [ "$magic" != "504b0304" ] && return 0  # 不是 ZIP
 
+    # 计算校验和
     local new_md5=""
     new_md5="$(md5sum "$update_apk" 2>/dev/null | cut -d' ' -f1)"
     local old_md5=""
@@ -691,21 +747,27 @@ check_quick_update() {
         return 0
     }
 
+    # 执行更新
     mkdir -p "$MODDIR/apk" >/dev/null 2>&1
 
+    # 备份旧 APK
     [ -f "$MODDIR/apk/installer.apk" ] && \
         cp -f "$MODDIR/apk/installer.apk" "$MODDIR/apk/installer.apk.bak" 2>/dev/null
 
+    # 复制新 APK
     cp -f "$update_apk" "$MODDIR/apk/installer.apk" 2>/dev/null
     chmod 0644 "$MODDIR/apk/installer.apk"
 
+    # 复制配套状态（如果有）
     for f in variant target_pkg target_apk mode; do
         [ -f "$update_dir/$f" ] && cp -f "$update_dir/$f" "$MODDIR/$f" 2>/dev/null
     done
 
+    # 记录更新时间
     echo "$(date +%s)" > "$MODDIR/update_timestamp" 2>/dev/null
     echo "$new_md5" > "$MODDIR/apk/installer.apk.md5" 2>/dev/null
 
+    # 归档更新文件
     mkdir -p "$update_dir/backup" 2>/dev/null
     mv -f "$update_apk" "$update_dir/backup/installer_$(date +%Y%m%d_%H%M%S).apk" 2>/dev/null
 
@@ -713,6 +775,9 @@ check_quick_update() {
     return 1  # 表示执行了更新
 }
 
+# ============================================================
+# ★ 新增函数：防回退守卫
+# ============================================================
 anti_rollback_guard() {
     local MODDIR="$1"
     mkdir -p "$STATE_DIR_BASE" >/dev/null 2>&1
@@ -728,11 +793,13 @@ anti_rollback_guard() {
     local target_file=""
     [ -f "$MODDIR/target_apk" ] && target_file="$(cat "$MODDIR/target_apk" 2>/dev/null)"
 
+    # 如果快速更新已执行，直接更新守卫
     if [ -f "$MODDIR/need_remount" ]; then
         echo "$module_md5" > "$GUARD_FILE" 2>/dev/null
         return 0
     fi
 
+    # 版本不一致 + 守卫有记录 → 可能回退
     if [ -n "$deployed_md5" ] && [ -n "$module_md5" ] && \
        [ "$deployed_md5" != "$module_md5" ] && [ -f "$target_file" ]; then
 
@@ -741,8 +808,10 @@ anti_rollback_guard() {
         cur_src="$(mount_src_for_target "$target_file")"
 
         if [ "$cur_src" != "$module_apk" ]; then
+            # 检测到回退！
             echo "rollback_detected" > "$MODDIR/rollback_flag" 2>/dev/null
 
+            # 从备份恢复
             if [ -f "$MODDIR/apk/installer.apk.bak" ]; then
                 local bak_md5
                 bak_md5="$(md5sum "$MODDIR/apk/installer.apk.bak" 2>/dev/null | cut -d' ' -f1)"
@@ -754,5 +823,6 @@ anti_rollback_guard() {
         fi
     fi
 
+    # 更新守卫
     [ -n "$module_md5" ] && echo "$module_md5" > "$GUARD_FILE" 2>/dev/null
 }
