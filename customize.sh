@@ -172,8 +172,11 @@ select_variant_by_key() {
     [ -z "$VARIANT" ] && abort "- $(t err_unknown_variant)"
 
     # 匹配 APK 文件名
-    local APK_NAME
+    local APK_NAME APK_SRC
     APK_NAME="$(match_apk_name "$VARIANT" "$SELECTED_MODE")"
+    APK_SRC="$(get_apk_source "$MODPATH" "$APK_NAME")"
+    [ -z "$APK_SRC" ] && abort "- APK not found: $APK_NAME"
+    APK_NAME="$(basename "$APK_SRC")"
 
     ui_print "- $(t installer_found): $PKG"
     ui_print "- $(t variant): $VARIANT ($SELECTED_MODE)"
