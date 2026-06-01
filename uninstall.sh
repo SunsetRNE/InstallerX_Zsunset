@@ -92,10 +92,16 @@ append_target "$SAVED_TARGET"
 for pkg in $PACKAGES; do append_targets_for_pkg "$pkg"; done
 sort -u "$TARGETS_TMP" -o "$TARGETS_TMP" 2>/dev/null || true
 
+mount_escape_path() {
+    printf '%s' "$1" | sed 's/\\/\\134/g; s/ /\\040/g; s/\t/\\011/g'
+}
+
 unmount_target() {
     local target="$1"
+    local escaped
     [ -n "$target" ] || return 0
-    run_cmd sh -c "awk '\$2==\"$target\"{found=1} END{exit !found}' /proc/self/mounts" >/dev/null 2>&1 || return 0
+    escaped="$(mount_escape_path "$target")"
+    run_cmd sh -c "awk -v t=\"$escaped\" '\$2==t{found=1} END{exit !found}' /proc/self/mounts" >/dev/null 2>&1 || return 0
     run_cmd umount "$target" >/dev/null 2>&1 && return 0
     sleep 1
     run_cmd umount "$target" >/dev/null 2>&1 && return 0
