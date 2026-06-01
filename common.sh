@@ -508,6 +508,38 @@ write_whitelist_xml() {
         <permission name="android.permission.QUERY_ALL_PACKAGES"/>
         <permission name="android.permission.SUBSTITUTE_NOTIFICATION_APP_NAME"/>
     </privapp-permissions>
+    <privapp-permissions package="com.android.permissioncontroller">
+        <permission name="android.permission.REAL_GET_TASKS"/>
+        <permission name="android.permission.READ_INSTALL_SESSIONS"/>
+        <permission name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+        <permission name="android.permission.USE_RESERVED_DISK"/>
+        <permission name="android.permission.INSTALL_PACKAGES"/>
+        <permission name="android.permission.PACKAGE_USAGE_STATS"/>
+        <permission name="android.permission.WRITE_SECURE_SETTINGS"/>
+        <permission name="android.permission.MANAGE_USERS"/>
+        <permission name="android.permission.ACCESS_MTP"/>
+        <permission name="android.permission.CLEAR_APP_CACHE"/>
+        <permission name="android.permission.UPDATE_APP_OPS_STATS"/>
+        <permission name="android.permission.DELETE_PACKAGES"/>
+        <permission name="android.permission.QUERY_ALL_PACKAGES"/>
+        <permission name="android.permission.SUBSTITUTE_NOTIFICATION_APP_NAME"/>
+    </privapp-permissions>
+    <privapp-permissions package="com.google.android.permissioncontroller">
+        <permission name="android.permission.REAL_GET_TASKS"/>
+        <permission name="android.permission.READ_INSTALL_SESSIONS"/>
+        <permission name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+        <permission name="android.permission.USE_RESERVED_DISK"/>
+        <permission name="android.permission.INSTALL_PACKAGES"/>
+        <permission name="android.permission.PACKAGE_USAGE_STATS"/>
+        <permission name="android.permission.WRITE_SECURE_SETTINGS"/>
+        <permission name="android.permission.MANAGE_USERS"/>
+        <permission name="android.permission.ACCESS_MTP"/>
+        <permission name="android.permission.CLEAR_APP_CACHE"/>
+        <permission name="android.permission.UPDATE_APP_OPS_STATS"/>
+        <permission name="android.permission.DELETE_PACKAGES"/>
+        <permission name="android.permission.QUERY_ALL_PACKAGES"/>
+        <permission name="android.permission.SUBSTITUTE_NOTIFICATION_APP_NAME"/>
+    </privapp-permissions>
 </permissions>
 XML
     set_perm "$xml_path" 0 0 0644
@@ -558,9 +590,9 @@ detect_installed_pkg() {
 detect_variant() {
     local pkg="$1"
     case "$pkg" in
-        com.google.android.packageinstaller) echo "GooglePackageInstaller" ;;
+        com.google.android.packageinstaller|com.google.android.permissioncontroller) echo "GooglePackageInstaller" ;;
         com.miui.packageinstaller) echo "MiuiPackageInstaller" ;;
-        com.android.packageinstaller) echo "AndroidPackageInstaller" ;;
+        com.android.packageinstaller|com.android.permissioncontroller) echo "AndroidPackageInstaller" ;;
         *)
             # 上下文推断
             local path
@@ -592,6 +624,23 @@ match_apk_name() {
             ;;
         *) echo "AndroidPackageInstaller.apk" ;;
     esac
+}
+
+get_apk_source() {
+    local MODPATH="$1"
+    local apk_name="$2"
+    [ -n "$apk_name" ] || return 1
+    if [ -f "$MODPATH/files/$apk_name" ]; then
+        echo "$MODPATH/files/$apk_name"
+        return 0
+    fi
+    # MIUI/HyperOS may still use the AOSP package-name compatible build.
+    if echo "$apk_name" | grep -q '^MiuiPackageInstaller'; then
+        local fallback
+        fallback="$(echo "$apk_name" | sed 's/^MiuiPackageInstaller/AndroidPackageInstaller/')"
+        [ -f "$MODPATH/files/$fallback" ] && { echo "$MODPATH/files/$fallback"; return 0; }
+    fi
+    return 1
 }
 
 # ============================================================
