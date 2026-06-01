@@ -6,7 +6,7 @@
 # ============================================================
 
 # ---------- 常量 ----------
-PACKAGES="com.miui.packageinstaller com.google.android.packageinstaller com.android.packageinstaller"
+PACKAGES="com.miui.packageinstaller com.google.android.packageinstaller com.android.packageinstaller com.android.permissioncontroller com.google.android.permissioncontroller"
 FALLBACK_PACKAGES="com.android.permissioncontroller com.google.android.permissioncontroller"
 
 STATE_DIR_BASE="/data/adb/installerx_zsunset"
@@ -379,15 +379,24 @@ resolve_target() {
     [ -n "$resolved" ] && echo "$resolved"
 }
 
+mount_escape_path() {
+    # /proc/self/mounts escapes spaces as \040 and backslashes as \134.
+    printf '%s' "$1" | sed 's/\\/\\134/g; s/ /\\040/g; s/\t/\\011/g'
+}
+
 mount_src_for_target() {
     local target="$1"
-    run_cmd sh -c "awk '\$2==\"$target\"{print \$1; exit}' /proc/self/mounts" 2>/dev/null
+    local escaped
+    escaped="$(mount_escape_path "$target")"
+    run_cmd sh -c "awk -v t=\"$escaped\" '\$2==t{print \$1; exit}' /proc/self/mounts" 2>/dev/null
 }
 
 do_umount_if_needed() {
     local target="$1"
+    local escaped
     [ -n "$target" ] || return 1
-    run_cmd sh -c "awk '\$2==\"$target\"{found=1} END{exit !found}' /proc/self/mounts" >/dev/null 2>&1 || return 0
+    escaped="$(mount_escape_path "$target")"
+    run_cmd sh -c "awk -v t=\"$escaped\" '\$2==t{found=1} END{exit !found}' /proc/self/mounts" >/dev/null 2>&1 || return 0
     run_cmd umount "$target" >/dev/null 2>&1 && return 0
     sleep 1
     run_cmd umount "$target" >/dev/null 2>&1 && return 0
@@ -424,9 +433,9 @@ cleanup_installer_caches() {
 partition_for_apk_path() {
     local p="$1"
     case "$p" in
-        *"/product/"*|/product/*|*"/system/product/") echo "/system/product" ;;
-        *"/system_ext/"*|/system_ext/*|*"/system/system_ext/") echo "/system/system_ext" ;;
-        *"/vendor/"*|/vendor/*|*"/system/vendor/") echo "/system/vendor" ;;
+        *"/product/"*|/product/*|*"/system/product/"*) echo "/system/product" ;;
+        *"/system_ext/"*|/system_ext/*|*"/system/system_ext/"*) echo "/system/system_ext" ;;
+        *"/vendor/"*|/vendor/*|*"/system/vendor/"*) echo "/system/vendor" ;;
         *) echo "/system" ;;
     esac
 }
