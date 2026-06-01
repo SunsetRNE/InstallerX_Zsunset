@@ -2,7 +2,7 @@
 
 MODID="installerx_zsunset"
 STATE_DIR="/data/adb/$MODID"
-PACKAGES="com.miui.packageinstaller com.google.android.packageinstaller com.android.packageinstaller"
+PACKAGES="com.miui.packageinstaller com.google.android.packageinstaller com.android.packageinstaller com.android.permissioncontroller com.google.android.permissioncontroller"
 
 TARGETS_TMP="/dev/tmp/installerx_targets.$$"
 [ -d /dev/tmp ] || TARGETS_TMP="/data/local/tmp/installerx_targets.$$"
