@@ -40,7 +40,8 @@ jobs:
           zip -r "output/${ZIP_NAME}" . \
             -x ".git/*" \
             -x ".github/*" \
-            -x "README.md"
+            -x "README.md" \
+            -x "output/*"
           echo "zip_name=${ZIP_NAME}" >> $GITHUB_OUTPUT
 
       - name: 上传构建产物
@@ -97,13 +98,13 @@ jobs:
 
           # 生成新的 update.json
           cat > update.json <<EOF
-          {
-            "version": "${VERSION}",
-            "versionCode": ${VCODE},
-            "zipUrl": "https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP_NAME}",
-            "changelog": "https://github.com/${{ github.repository }}/releases/tag/${TAG}"
-          }
-          EOF
+{
+  "version": "${VERSION}",
+  "versionCode": ${VCODE},
+  "zipUrl": "https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP_NAME}",
+  "changelog": "https://github.com/${{ github.repository }}/releases/tag/${TAG}"
+}
+EOF
 
           # 提交并推回 main 分支
           git config user.name "github-actions[bot]"
