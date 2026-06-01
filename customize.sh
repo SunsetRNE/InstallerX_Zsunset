@@ -231,44 +231,35 @@ reinstall_fix() {
 # ============================================================
 setup_engine() {
     local MODPATH="$1"
-    local variant partition replace_folder
+    local partition replace_folder target_file target_dir target_name apk_name apk_src engine
 
-    variant="$(cat "$MODPATH/variant" 2>/dev/null)"
     partition="$(cat "$MODPATH/target_partition" 2>/dev/null)"
     replace_folder="$(cat "$MODPATH/target_folder" 2>/dev/null)"
-    local engine
+    target_file="$(cat "$MODPATH/target_apk" 2>/dev/null)"
+    apk_name="$(cat "$MODPATH/apk_name" 2>/dev/null)"
+    [ -z "$apk_name" ] && apk_name="AndroidPackageInstaller.apk"
+    apk_src="$(get_apk_source "$MODPATH" "$apk_name")"
+    [ -z "$apk_src" ] && abort "- APK not found: $apk_name"
+
     engine="$(choose_engine)"
 
     echo "$engine" > "$MODPATH/engine" 2>/dev/null
 
     if [ "$engine" = "fix" ]; then
         ui_print "- $(t engine_fix)"
-        # Fix 引擎：通过 Magisk replace 机制
-        local mod_apk_dir="$MODPATH${partition}/priv-app/ModPackageInstaller"
-        mkdir -p "$mod_apk_dir"
-        rm -f "$mod_apk_dir"/*.apk >/dev/null 2>&1
+        # Fix 引擎：只替换原 PackageInstaller 所在目录，避免 .replace 覆盖整个 priv-app。
+        [ -z "$replace_folder" ] && replace_folder="$(dirname "$target_file")"
+        [ -z "$replace_folder" ] && abort "- $(t err_apk_path)"
+        replace_folder="$(normalize_module_path "$replace_folder")"
+        target_dir="$MODPATH$replace_folder"
+        target_name="$(basename "$target_file")"
+        [ -z "$target_name" ] && target_name="$apk_name"
 
-        # 复制 APK 到 ModPackageInstaller
-        local apk_name
-        apk_name="$(cat "$MODPATH/apk_name" 2>/dev/null)"
-        [ -z "$apk_name" ] && apk_name="AndroidPackageInstaller.apk"
-        cp -f "$MODPATH/files/$apk_name" "$mod_apk_dir/" >/dev/null 2>&1
-
-        # 创建别名目录（直接覆盖原路径）
-        local target_file
-        target_file="$(cat "$MODPATH/target_apk" 2>/dev/null)"
-        if [ -n "$target_file" ]; then
-            local alias_dir="$MODPATH$(dirname "$target_file")"
-            mkdir -p "$alias_dir"
-            cp -f "$MODPATH/files/$apk_name" "$alias_dir/" >/dev/null 2>&1
-        fi
-
-        # 创建 .replace 文件告诉 Magisk 覆盖
-        [ -z "$replace_folder" ] && replace_folder="/system/priv-app"
-        mkdir -p "$MODPATH$replace_folder"
-        touch "$MODPATH$replace_folder/.replace"
-
-        set_perm_recursive "$mod_apk_dir" 0 0 0755 0644
+        mkdir -p "$target_dir"
+        rm -f "$target_dir"/*.apk >/dev/null 2>&1
+        cp -f "$apk_src" "$target_dir/$target_name" >/dev/null 2>&1 || abort "- Failed to copy APK"
+        touch "$target_dir/.replace"
+        set_perm_recursive "$target_dir" 0 0 0755 0644
     else
         ui_print "- $(t engine_bind)"
         # Bind 引擎：运行时 mount
