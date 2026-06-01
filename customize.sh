@@ -262,19 +262,13 @@ setup_engine() {
         set_perm_recursive "$target_dir" 0 0 0755 0644
     else
         ui_print "- $(t engine_bind)"
-        # Bind 引擎：运行时 mount
-        local target_file
-        target_file="$(cat "$MODPATH/target_apk" 2>/dev/null)"
-        local apk_name
-        apk_name="$(cat "$MODPATH/apk_name" 2>/dev/null)"
-        [ -z "$apk_name" ] && apk_name="AndroidPackageInstaller.apk"
-
+        # Bind 引擎：在模块中准备与原目标同名的 APK，运行时再 bind 到真实路径。
         if [ -n "$target_file" ]; then
-            local target_dir="$MODPATH$(dirname "$target_file")"
-            local target_name="$(basename "$target_file")"
+            target_dir="$MODPATH$(dirname "$target_file")"
+            target_name="$(basename "$target_file")"
             mkdir -p "$target_dir"
             rm -f "$target_dir"/*.apk >/dev/null 2>&1
-            cp -f "$MODPATH/files/$apk_name" "$target_dir/$target_name" >/dev/null 2>&1
+            cp -f "$apk_src" "$target_dir/$target_name" >/dev/null 2>&1 || abort "- Failed to copy APK"
             set_perm_recursive "$target_dir" 0 0 0755 0644
         fi
     fi
@@ -315,8 +309,9 @@ save_state() {
     echo "$apk_name" > "$MODPATH/apk_name"
 
     # 复制选中的 APK 到 apk/installer.apk
-    [ -n "$apk_name" ] && [ -f "$MODPATH/files/$apk_name" ] && \
-        cp -f "$MODPATH/files/$apk_name" "$MODPATH/apk/installer.apk"
+    local apk_src
+    apk_src="$(get_apk_source "$MODPATH" "$apk_name")"
+    [ -n "$apk_src" ] && cp -f "$apk_src" "$MODPATH/apk/installer.apk"
 
     # 设置权限
     set_perm "$MODPATH/apk/installer.apk" 0 0 0644
@@ -337,8 +332,8 @@ uninstall_updates() {
 
 # ---------- 清理 ----------
 clean_files() {
-    rm -rf "$MODPATH/files" 2>/dev/null
-    rm -rf "$MODPATH/bin" 2>/dev/null
+    # 刷入后必须保留 apk/installer.apk、状态文件和 bin/keycheck。
+    # 只清理运行时缓存，避免把源码 APK 或 keycheck 提前删除导致后续流程不可用。
     cleanup_installer_caches
 }
 
@@ -390,8 +385,9 @@ run_install() {
     fi
     save_state "$MODPATH"
 
-    # Step 5: 设置引擎（fix/bind）
+    # Step 5: 设置引擎（fix/bind），随后再次保存引擎等派生状态
     setup_engine "$MODPATH"
+    save_state "$MODPATH"
 
     # Step 6: 写权限白名单
     local partition
